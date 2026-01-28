@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Personal Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #eef2f3; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        h1 { color: #2c3e50; margin-bottom: 30px; }
+        .container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+        .card { background: white; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); padding: 25px; width: 220px; text-align: center; }
+        .label { font-size: 1.1em; color: #7f8c8d; font-weight: bold; }
+        .value { font-size: 3em; font-weight: bold; color: #2980b9; margin: 15px 0; }
+        #status { margin-top: 20px; font-size: 0.9em; color: #27ae60; font-weight: bold; }
+        .input-container {
+    margin: 15px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.input-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+}
+
+.input-row span {
+    font-size: 0.85em; /* Giảm nhẹ cỡ chữ để vừa hàng */
+    color: #555;
+    font-weight: 500;
+    min-width: 80px; /* Thêm độ rộng tối thiểu cho nhãn */
+}
+
+.input-row input {
+    width: 70px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    text-align: center;
+    outline: none;
+    transition: 0.3s;
+}
+
+.input-row input:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 5px rgba(52, 152, 219, 0.2);
+}
+
+.set-button {
+    background-color: #34495e;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    width: 80%; /* Để nút không chiếm hết 100% chiều ngang */
+    margin: 15px auto 0; /* Căn giữa nút */
+    display: block;
+    transition: 0.3s;
+}
+
+.set-button:hover {
+    background-color: #2c3e50;
+    transform: scale(1.05);
+}
+    </style>
+</head>
+<body>
+
+    <h1>BẢNG ĐIỀU KHIỂN ESP32</h1>
+
+    <div class="container">
+    <div class="card">
+        <div class="label">NHIỆT ĐỘ</div>
+        <div class="value"><span id="temp">--</span><span>°C</span></div>
+        <div style="background: #eee; border-radius: 10px; height: 10px; margin: 10px 0; overflow: hidden;">
+            <div id="temp-bar" style="width: 0%; height: 100%; background: linear-gradient(to right, #3498db, #e74c3c); transition: width 0.5s;"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="label">ĐỘ ẨM</div>
+        <div class="value"><span id="humi">--</span><span>%</span></div>
+        <div style="background: #eee; border-radius: 10px; height: 10px; margin: 10px 0; overflow: hidden;">
+            <div id="humi-bar" style="width: 0%; height: 100%; background: #3498db; transition: width 0.5s;"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="label">MÁY QUẠT</div>
+        <div id="fan-status" style="margin: 10px 0; font-weight: bold; color: #7f8c8d;">Đang tắt</div>
+        <button id="btn-fan" style="padding: 12px; font-size: 1em; cursor: pointer; border-radius: 8px; border: none; background-color: #27ae60; color: white; width: 100%; font-weight: bold;">
+            BẬT QUẠT
+        </button>
+    </div>
+
+    <div class="card">
+        <div class="label">BÓNG ĐÈN</div>
+        <div id="light-status" style="margin: 10px 0; font-weight: bold; color: #7f8c8d;">Đang tắt</div>
+        <button id="btn-light" style="padding: 12px; font-size: 1em; cursor: pointer; border-radius: 8px; border: none; background-color: #f1c40f; color: white; width: 100%; font-weight: bold;">
+            BẬT ĐÈN
+        </button>
+        </div>
+    <div class="card" id="setting-card">
+    <div class="label">CÀI ĐẶT NGƯỠNG</div>
+    <div class="input-container">
+        <div class="input-row">
+            <span>Temp Max:</span>
+            <input type="number" id="inputMax" placeholder="00"> 
+        </div>
+        <div class="input-row">
+            <span>Temp Min:</span>
+            <input type="number" id="inputMin" placeholder="00">
+        </div>
+
+    <button id="btn-set" class="set-button">SET</button> 
+</div>
+    <div id="status">Đang đợi dữ liệu từ Cloud...</div>
+
+    <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.17.1/firebase-app.js";
+    import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/9.17.1/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyA5tgM4SQfplDgXHI5BGga4XWCzDyPegYU",
+        authDomain: "my-project-k32.firebaseapp.com",
+        databaseURL: "https://my-project-k32-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "my-project-k32",
+        storageBucket: "my-project-k32.appspot.com",
+        messagingSenderId: "721814761132",
+        appId: "1:721814761132:web:2e4b052bd8f373873b7909x"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
+
+    // --- 1. LẤY DỮ LIỆU CẢM BIẾN ---
+    onValue(ref(database, 'sensor'), (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            const t = data.temperature || 0;
+            const h = data.humidity || 0;
+            document.getElementById("temp").innerText = t;
+            document.getElementById("humi").innerText = h;
+            document.getElementById("temp-bar").style.width = Math.min((t / 50) * 100, 100) + "%";
+            document.getElementById("humi-bar").style.width = Math.min(h, 100) + "%";
+        }
+    });
+
+    // --- 2. ĐIỀU KHIỂN THIẾT BỊ (GÓI CONTROL) ---
+    let currentFan = 0;
+    let currentLamp = 0;
+
+    // Lắng nghe để cập nhật trạng thái nút bấm từ Firebase
+    onValue(ref(database, 'control'), (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            currentFan = data.fan ?? 0;
+            currentLamp = data.lamp ?? 0;
+
+            // Cập nhật giao diện Quạt
+            const btnFan = document.getElementById("btn-fan");
+            const fanStatus = document.getElementById("fan-status");
+            btnFan.innerText = currentFan === 1 ? "TẮT QUẠT" : "BẬT QUẠT";
+            btnFan.style.backgroundColor = currentFan === 1 ? "#c0392b" : "#27ae60";
+            fanStatus.innerText = currentFan === 1 ? "Đang bật" : "Đang tắt";
+
+            // Cập nhật giao diện Đèn
+            const btnLight = document.getElementById("btn-light");
+            const lightStatus = document.getElementById("light-status");
+            btnLight.innerText = currentLamp === 1 ? "TẮT ĐÈN" : "BẬT ĐÈN";
+            btnLight.style.backgroundColor = currentLamp === 1 ? "#7f8c8d" : "#f1c40f";
+            lightStatus.innerText = currentLamp === 1 ? "Đang sáng" : "Đang tắt";
+        }
+    });
+
+    // Hàm gửi duy nhất
+    function sendControl() {
+        set(ref(database, 'control'), {
+            fan: currentFan,
+            lamp: currentLamp
+        });
+    }
+
+    document.getElementById("btn-fan").onclick = function() {
+        currentFan = (currentFan === 0) ? 1 : 0;
+        sendControl();
+    };
+
+    document.getElementById("btn-light").onclick = function() {
+        currentLamp = (currentLamp === 0) ? 1 : 0;
+        sendControl();
+    };
+
+    // --- 3. CÀI ĐẶT NGƯỠNG (GÓI SETTINGS) ---
+    document.getElementById("btn-set").onclick = function() {
+        const valMax = document.getElementById("inputMax").value;
+        const valMin = document.getElementById("inputMin").value;
+        if (valMax !== "" && valMin !== "") {
+            set(ref(database, 'settings'), {
+                temp_max: parseInt(valMax),
+                temp_min: parseInt(valMin)
+            }).then(() => alert("Đã gửi cài đặt!"));
+        }
+    };
+</script>
+</body>
+</html>

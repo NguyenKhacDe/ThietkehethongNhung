@@ -1,8 +1,8 @@
 #include <Wire.h>
 #include <SPI.h>
 #include <DHT.h>
-#include "SSD1306Ascii.h"
-#include "SSD1306AsciiWire.h"
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
 /* ===== LORA (SPI THUẦN) ===== */
 #define LORA_CS   PA4
@@ -97,8 +97,11 @@ void sendPacket(String s){
 }
 
 /* ===== OLED ===== */
-#define I2C_ADDRESS 0x3C
-SSD1306AsciiWire oled;
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET    -1
+#define SCREEN_ADDRESS 0x3C
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 /* ===== DHT ===== */
 #define DHTPIN PB1
@@ -109,6 +112,7 @@ DHT dht(DHTPIN, DHTTYPE);
 #define Fan  PB12
 #define Lamp PB13
 
+int CtrFan=0, CtrLamp=0;
 int TEMP_MAX=35, TEMP_MIN=25;
 int Temp=0, Hum=0;
 String strQuat="OFF", strDen="OFF";
@@ -116,17 +120,32 @@ unsigned long lastOLED=0;
 
 /* ===== UPDATE RELAY ===== */
 void updateRelay(){
-  if(Temp > TEMP_MAX){
+  // ===== FAN =====
+  if(CtrFan == 1){
     digitalWrite(Fan, HIGH);
-    digitalWrite(Lamp, LOW);
+    strQuat = "MANUAL ON";
+  }else{
+    if(Temp > TEMP_MAX){
+      digitalWrite(Fan, HIGH);
+      strQuat = "AUTO ON";
+    }else{
+      digitalWrite(Fan, LOW);
+      strQuat = " AUTO OFF";
+    }
   }
-  else if(Temp < TEMP_MIN){
-    digitalWrite(Fan, LOW);
+
+  // ===== LAMP =====
+  if(CtrLamp == 1){
     digitalWrite(Lamp, HIGH);
-  }
-  else{
-    digitalWrite(Fan, LOW);
-    digitalWrite(Lamp, LOW);
+    strDen = "MANUAL ON";
+  }else{
+    if(Temp < TEMP_MIN){
+      digitalWrite(Lamp, HIGH);
+      strDen = "AUTO ON";
+    }else{
+      digitalWrite(Lamp, LOW);
+      strDen = "AUTO OFF";
+    }
   }
 }
 
@@ -134,13 +153,21 @@ void setup(){
   Serial1.begin(115200);
   pinMode(Fan,OUTPUT); pinMode(Lamp,OUTPUT);
   Wire.begin();
-  oled.begin(&Adafruit128x64, I2C_ADDRESS);
-  oled.setFont(Adafruit5x7);
-  oled.println("STM32 READY");
   dht.begin();
   SPI.begin();
   pinMode(LORA_CS, OUTPUT); csHigh();
   resetRadio(); radioInit();
+  /* ===== OLED ===== */
+  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+    while (1);
+  }
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("STM32 + LoRa");
+  display.display();
+
 }
 
 void loop(){
@@ -163,14 +190,24 @@ void loop(){
 
     if(rx.startsWith("REQ")){
       int colon = rx.indexOf(':');
-      int comma = rx.indexOf(',');
+      int c1 = rx.indexOf(',', colon + 1);
+      int c2 = rx.indexOf(',', c1 + 1);
+      int c3 = rx.indexOf(',', c2 + 1);
 
-      if(colon > 0 && comma > colon){
-        TEMP_MAX = rx.substring(colon + 1, comma).toInt();
-        TEMP_MIN = rx.substring(comma + 1).toInt();
+      if(colon > 0 && c1 > colon && c2 > c1 && c3 > c2){
+        TEMP_MAX = rx.substring(colon + 1, c1).toInt();
+        TEMP_MIN = rx.substring(c1 + 1, c2).toInt();
+        CtrFan   = rx.substring(c2 + 1, c3).toInt();
+        CtrLamp  = rx.substring(c3 + 1).toInt();
 
-        Serial1.println("Nhan TMAX/TMIN: "
-          + String(TEMP_MAX) + "/" + String(TEMP_MIN));
+        Serial1.print("Nhan: Tmax=");
+        Serial1.print(TEMP_MAX);
+        Serial1.print(" Tmin=");
+        Serial1.print(TEMP_MIN);
+        Serial1.print(" Fan=");
+        Serial1.print(CtrFan);
+        Serial1.print(" Lamp=");
+        Serial1.println(CtrLamp);
       }
 
       Temp = dht.readTemperature();
@@ -186,14 +223,26 @@ void loop(){
 
   }
 
-  if(millis()-lastOLED>2000){
-    lastOLED=millis();
-    oled.clear();
-    oled.println("--- GIAM SAT ---");
-    oled.print("T: "); oled.println(Temp);
-    oled.print("H: "); oled.println(Hum);
-    oled.print("MAX/MIN: ");
-    oled.print(TEMP_MAX); oled.print("/");
-    oled.println(TEMP_MIN);
-  }
+  /* ===== OLED ===== */
+  display.clearDisplay();
+  display.drawRect(0, 0, 128, 64, SSD1306_WHITE);
+
+  display.setCursor(5, 5);
+  display.print("Nhiet do: "); display.print(Temp); display.print(" C");
+
+  display.setCursor(5, 15);
+  display.print("Do am: "); display.print(Hum); display.print(" %");
+
+  display.drawLine(0, 25, 128, 25, SSD1306_WHITE);
+
+  display.setCursor(5, 30);
+  display.print("Den: "); display.print(strDen);
+
+  display.setCursor(5, 40);
+  display.print("Quat: "); display.print(strQuat);
+
+  display.setCursor(5, 50);
+  display.print("Tmax/Tmin:"); display.print(TEMP_MAX);display.print("/");display.print(TEMP_MIN);
+
+  display.display();
 }

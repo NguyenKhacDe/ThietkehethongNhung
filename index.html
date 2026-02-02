@@ -8,7 +8,22 @@
         body { font-family: 'Segoe UI', sans-serif; background-color: #eef2f3; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
         h1 { color: #2c3e50; margin-bottom: 30px; }
         .container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
-        .card { background: white; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); padding: 25px; width: 220px; text-align: center; }
+        .card { background: white; 
+    border-radius: 15px; 
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1); 
+    padding: 25px; 
+    width: 220px; 
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 220px; 
+}
+
+/* Thêm đoạn này để các thanh hiển thị lấy lại chiều rộng */
+.card > div[style*="background: #eee"] {
+    width: 100%;}
         .label { font-size: 1.1em; color: #7f8c8d; font-weight: bold; }
         .value { font-size: 3em; font-weight: bold; color: #2980b9; margin: 15px 0; }
         #status { margin-top: 20px; font-size: 0.9em; color: #27ae60; font-weight: bold; }
@@ -62,15 +77,21 @@
     transition: 0.3s;
 }
 
-.set-button:hover {
+.set-button:hover:not(:disabled) {
     background-color: #2c3e50;
     transform: scale(1.05);
+}
+
+.set-button:disabled {
+    background-color: #bdc3c7;
+    cursor: not-allowed;
+    opacity: 0.7;
 }
     </style>
 </head>
 <body>
 
-    <h1>BẢNG ĐIỀU KHIỂN ESP32</h1>
+    <h1>BẢNG ĐIỀU KHIỂN </h1>
 
     <div class="container">
     <div class="card">
@@ -91,21 +112,21 @@
 
     <div class="card">
         <div class="label">MÁY QUẠT</div>
-        <div id="fan-status" style="margin: 10px 0; font-weight: bold; color: #7f8c8d;">Đang tắt</div>
+        
         <button id="btn-fan" style="padding: 12px; font-size: 1em; cursor: pointer; border-radius: 8px; border: none; background-color: #27ae60; color: white; width: 100%; font-weight: bold;">
-            BẬT QUẠT
+            BẬT QUẠT MANUAL
         </button>
     </div>
 
     <div class="card">
         <div class="label">BÓNG ĐÈN</div>
-        <div id="light-status" style="margin: 10px 0; font-weight: bold; color: #7f8c8d;">Đang tắt</div>
+       
         <button id="btn-light" style="padding: 12px; font-size: 1em; cursor: pointer; border-radius: 8px; border: none; background-color: #f1c40f; color: white; width: 100%; font-weight: bold;">
-            BẬT ĐÈN
+            BẬT ĐÈN MANUAL
         </button>
         </div>
     <div class="card" id="setting-card">
-    <div class="label">CÀI ĐẶT NGƯỠNG</div>
+    <div class="label">CÀI ĐẶT NGƯỠNG AUTO</div>
     <div class="input-container">
         <div class="input-row">
             <span>Temp Max:</span>
@@ -116,7 +137,7 @@
             <input type="number" id="inputMin" placeholder="00">
         </div>
 
-    <button id="btn-set" class="set-button">SET</button> 
+    <button id="btn-set" class="set-button">SET AUTO</button> 
 </div>
     <div id="status">Đang đợi dữ liệu từ Cloud...</div>
 
@@ -156,26 +177,22 @@
 
     // Lắng nghe để cập nhật trạng thái nút bấm từ Firebase
     onValue(ref(database, 'control'), (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-            currentFan = data.fan ?? 0;
-            currentLamp = data.lamp ?? 0;
+    const data = snapshot.val();
+    if (data) {
+        currentFan = data.fan ?? 0;
+        currentLamp = data.lamp ?? 0;
 
-            // Cập nhật giao diện Quạt
-            const btnFan = document.getElementById("btn-fan");
-            const fanStatus = document.getElementById("fan-status");
-            btnFan.innerText = currentFan === 1 ? "TẮT QUẠT" : "BẬT QUẠT";
-            btnFan.style.backgroundColor = currentFan === 1 ? "#c0392b" : "#27ae60";
-            fanStatus.innerText = currentFan === 1 ? "Đang bật" : "Đang tắt";
+        // Cập nhật giao diện Quạt 
+        const btnFan = document.getElementById("btn-fan");
+        btnFan.innerText = currentFan === 1 ? "TẮT QUẠT MANUAL" : "BẬT QUẠT MANUAL";
+        btnFan.style.backgroundColor = currentFan === 1 ? "#c0392b" : "#27ae60";
 
-            // Cập nhật giao diện Đèn
-            const btnLight = document.getElementById("btn-light");
-            const lightStatus = document.getElementById("light-status");
-            btnLight.innerText = currentLamp === 1 ? "TẮT ĐÈN" : "BẬT ĐÈN";
-            btnLight.style.backgroundColor = currentLamp === 1 ? "#7f8c8d" : "#f1c40f";
-            lightStatus.innerText = currentLamp === 1 ? "Đang sáng" : "Đang tắt";
-        }
-    });
+        // Cập nhật giao diện Đèn 
+        const btnLight = document.getElementById("btn-light");
+        btnLight.innerText = currentLamp === 1 ? "TẮT ĐÈN MANUAL" : "BẬT ĐÈN MANUAL";
+        btnLight.style.backgroundColor = currentLamp === 1 ? "#7f8c8d" : "#f1c40f";
+    }
+});
 
     // Hàm gửi duy nhất
     function sendControl() {
@@ -196,16 +213,52 @@
     };
 
     // --- 3. CÀI ĐẶT NGƯỠNG (GÓI SETTINGS) ---
-    document.getElementById("btn-set").onclick = function() {
-        const valMax = document.getElementById("inputMax").value;
-        const valMin = document.getElementById("inputMin").value;
-        if (valMax !== "" && valMin !== "") {
+   const inputMax = document.getElementById("inputMax");
+    const inputMin = document.getElementById("inputMin");
+    const btnSet = document.getElementById("btn-set");
+
+    // Hàm kiểm tra logic ngưỡng (Để ở ngoài cùng để chạy ngay khi load trang)
+    function checkThreshold() {
+        const valMax = parseFloat(inputMax.value);
+        const valMin = parseFloat(inputMin.value);
+
+        // Kiểm tra điều kiện: Nếu một trong 2 ô trống HOẶC Min >= Max
+        if (inputMax.value === "" || inputMin.value === "" || valMin >= valMax) {
+            btnSet.disabled = true;
+            btnSet.style.backgroundColor = "#bdc3c7"; // Màu xám khi lỗi
+            btnSet.style.cursor = "not-allowed";
+            btnSet.title = "Temp Min phải nhỏ hơn Temp Max và không được để trống";
+        } else {
+            btnSet.disabled = false;
+            btnSet.style.backgroundColor = "#34495e"; // Màu xanh đậm khi hợp lệ
+            btnSet.style.cursor = "pointer";
+            btnSet.title = "Nhấn để lưu cài đặt";
+        }
+    }
+
+    // ĐĂNG KÝ SỰ KIỆN (Chạy ngay khi trình duyệt đọc đến đây)
+    inputMax.addEventListener("input", checkThreshold);
+    inputMin.addEventListener("input", checkThreshold);
+
+    // Sự kiện Click nút SET
+    btnSet.onclick = function() {
+        const valMax = parseInt(inputMax.value);
+        const valMin = parseInt(inputMin.value);
+        
+        if (!isNaN(valMax) && !isNaN(valMin)) {
             set(ref(database, 'settings'), {
-                temp_max: parseInt(valMax),
-                temp_min: parseInt(valMin)
-            }).then(() => alert("Đã gửi cài đặt!"));
+                temp_max: valMax,
+                temp_min: valMin
+            }).then(() => {
+                alert("Đã gửi cài đặt thành công!");
+            }).catch((error) => {
+                alert("Lỗi: " + error.message);
+            });
         }
     };
+
+    // Chạy kiểm tra lần đầu tiên ngay khi tải trang
+    checkThreshold();
 </script>
 </body>
 </html>

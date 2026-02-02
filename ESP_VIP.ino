@@ -43,8 +43,8 @@
 #define IRQ_CRC_ERR 0x20
 
 /* ================= WIFI + FIREBASE ================= */
-#define WIFI_SSID "UET-Wifi-Office-Free 2.4Ghz"
-#define WIFI_PASSWORD ""
+#define WIFI_SSID "JIG-PCB"
+#define WIFI_PASSWORD "11111111"
 #define API_KEY "AIzaSyA5tgM4SQfplDgXHI5BGga4XWCzDyPegYU"
 #define DATABASE_URL "my-project-k32-default-rtdb.asia-southeast1.firebasedatabase.app"
 
@@ -55,6 +55,7 @@ FirebaseConfig config;
 /* ================= BIẾN ================= */
 int temp = 0, hum = 0;
 int tempMax = 35, tempMin = 25;
+int fan=0,lamp=0;
 
 unsigned long lastPoll   = 0;
 unsigned long lastUpload = 0;
@@ -202,7 +203,7 @@ void loop() {
   /* ===== 1. POLL STM32, Khóa REG khi có CONFIG ===== */
   if (millis() - lastPoll > 5000) {
     lastPoll = millis();
-    String req = "REQ:" + String(tempMax) + "," + String(tempMin);
+    String req = "REQ:" + String(tempMax) + "," + String(tempMin)+ "," + String(fan)+"," + String(lamp);
     sendPacket(req);
     Serial.println("-> TX: "+req);
   }
@@ -226,9 +227,19 @@ void loop() {
   if (Firebase.readStream(fbdo_stream)) {
     if (fbdo_stream.streamAvailable()) {
 
+      String path = fbdo_stream.dataPath();
+      FirebaseJsonData jsonData;
       FirebaseJson &json = fbdo_stream.jsonObject();
       FirebaseJsonData jd;
 
+      // 1. Xử lý gói CONTROL (Fan và Lamp)
+      if (path == "/control" || path == "/") {
+        if (json.get(jsonData, "fan")) fan = jsonData.intValue;
+        if (json.get(jsonData, "lamp")) lamp = jsonData.intValue;
+        
+        Serial.printf("Gói CONTROL -> Fan: %d, Lamp: %d\n", fan, lamp);
+      }
+      //2. Xử lý gói TempMax/Min
       if (json.get(jd, "temp_max")) {
         if (tempMax != jd.intValue) {
           tempMax = jd.intValue;
@@ -244,6 +255,7 @@ void loop() {
       }
     }
   }
+  
 
   /* ===== 4. UPLOAD SENSOR ===== */
   if (millis() - lastUpload > 5000) {
@@ -254,4 +266,6 @@ void loop() {
     js.set("humidity", hum);
     Firebase.setJSON(fbdo_send, "/sensor", js);
   }
+
+  
 }
